@@ -1,0 +1,62 @@
+from bs4 import BeautifulSoup
+import requests
+import requests.exceptions
+from urllib.parse import urlsplit
+from collections import deque
+import re
+import pandas as pd
+
+url_web = 'http://www.miet.ac.in'
+# a set queue of urls to be crawled
+unprocessed = deque([url_web])
+
+# a set of urls already crawled
+processed = set()
+
+# a set of crawled emails
+emails = set()
+
+#process urls one by one
+while len(new_urls):
+    url = unprocessed.popleft()
+    processed.add(url)
+    parts = urlsplit(url)
+  
+    base_url = "{0.scheme}://{0.netloc}".format(parts)
+    path = url[:url.rfind('/')+1] if '/' in parts.path else url
+    print("Processing %s" % url)
+    
+    try:
+      response = requests.get(url)
+    except (requests.exceptions.MissingSchema, requests.exceptions.ConnectionError, TypeError):
+      continue
+  
+    new_emails = set(re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", response.text, re.I))
+    emails.update(new_emails)
+    # Beutiful soup for the html document
+    soup = BeautifulSoup(response.text,"html.parser")
+
+    # For Other Links
+    for anchor in soup.find_all("a"):
+        # extract link url from the anchor
+        link = anchor.attrs["href"] if "href" in anchor.attrs else ''
+        # resolve relative links (starting with /)
+        if link.startswith('/'):
+            link = base_url + link
+        elif not link.startswith('http'):
+            link = path + link
+        # add the new url to the queue if it was not in unprocessed list nor in processed list yet
+        if not link.endswith('javascript:void(0)'):
+            if link.startswith('http://www.miet.ac.in/'):
+                if not link.endswith('.pdf'):
+                    if not link.endswith('.jpg'):
+                        if not link.endswith('.png'):
+                            if not link.endswith('.mp4'):
+                                if not link.endswith('.xls'):
+                                    if not link in unprocessed and not link in processed:
+                                        unprocessed.append(link)
+
+df = pd.DataFrame(emails, columns=["Email"])
+df.to_csv('email.csv', index=False)
+
+print(df)
